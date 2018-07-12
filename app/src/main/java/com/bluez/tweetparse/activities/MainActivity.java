@@ -1,9 +1,13 @@
 package com.bluez.tweetparse.activities;
 
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.widget.Toast;
 
 import com.android.volley.RequestQueue;
@@ -13,6 +17,7 @@ import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.bluez.tweetparse.R;
 import com.bluez.tweetparse.adapters.RecyclerViewAdapter;
+import com.bluez.tweetparse.db.TweetDbHelper;
 import com.bluez.tweetparse.models.Tweet;
 
 import org.json.JSONArray;
@@ -22,12 +27,15 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.bluez.tweetparse.db.TweetContract.TweetEntry;
+
 public class MainActivity extends AppCompatActivity {
-    private final String URL = "http://198.199.90.139/tweets";
+    private final String URL = "https://cryptohype.live/tweets";
     private JsonObjectRequest request;
     private RequestQueue requestQueue;
     private List<Tweet> tweetList;
     private RecyclerView recyclerView;
+    private TweetDbHelper mDbHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
 
         recyclerView = findViewById(R.id.recycler_view_id);
         tweetList = new ArrayList<>();
+        mDbHelper = new TweetDbHelper(this);
         jsonRequest();
     }
 
@@ -46,24 +55,37 @@ public class MainActivity extends AppCompatActivity {
             public void onResponse(JSONObject response) {
                 try {
                     JSONArray jsonArray = response.getJSONArray("tweets");
-                    JSONObject jsonObject = null;
+                    JSONObject json;
+
+                    SQLiteDatabase db = mDbHelper.getWritableDatabase();
+                    db.beginTransaction();
 
                     for(int i = 0; i < jsonArray.length(); i++) {
-                        jsonObject = jsonArray.getJSONObject(i);
-                        Tweet tweet = new Tweet();
+                        json = jsonArray.getJSONObject(i);
 
-                        tweet.setCoinName(jsonObject.getString("coin_name"));
-                        tweet.setCoinSymbol(jsonObject.getString("coin_symbol"));
-                        tweet.setCoinHandle(jsonObject.getString("coin_handle"));
-                        tweet.setTweet(jsonObject.getString("tweet"));
-                        tweet.setUrl(jsonObject.getString("url"));
-                        tweet.setDate(jsonObject.getString("date"));
-                        tweet.setKeyword(jsonObject.getString("keyword"));
+                        ContentValues values = new ContentValues();
+                        values.put(TweetEntry.COL_TWEETID, Long.parseLong(json.getString("tweetid")));
+                        values.put(TweetEntry.COL_COIN_NAME, json.getString("coin_name"));
+                        values.put(TweetEntry.COL_COIN_SYMBOL, json.getString("coin_symbol"));
+                        values.put(TweetEntry.COL_COIN_HANDLE, json.getString("coin_handle"));
+                        values.put(TweetEntry.COL_TWEET, json.getString("tweet"));
+                        values.put(TweetEntry.COL_URL, json.getString("url"));
+                        values.put(TweetEntry.COL_DATE, json.getString("date"));
+                        values.put(TweetEntry.COL_KEYWORD, json.getString("keyword"));
 
-                        tweetList.add(tweet);
+                        db.insertWithOnConflict(TweetEntry.TABLE_NAME, null, values,
+                                SQLiteDatabase.CONFLICT_IGNORE);
                     }
 
+                    Log.d("db", "Wrote to database...");
+
+                    db.setTransactionSuccessful();
+                    db.endTransaction();
+                    db.close();
+
+                    getTweetListData();
                     setupRecyclerView(tweetList);
+
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -72,8 +94,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onErrorResponse(VolleyError error) {
                 Toast.makeText(MainActivity.this,
-                        "Couldn't fetch data!",
+                        "Couldn't fetch data! \nShowing Cached Data...",
                         Toast.LENGTH_SHORT).show();
+
+                Log.d("db", "Reading cached data...");
+
+                getTweetListData();
+                setupRecyclerView(tweetList);
             }
         });
 
@@ -86,5 +113,39 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setHasFixedSize(true);
         recyclerView.setAdapter(adapter);
+    }
+
+    private void getTweetListData() {
+        SQLiteDatabase db = mDbHelper.getReadableDatabase();
+        db.beginTransaction();
+
+        String orderBy = TweetEntry.COL_DATE + " DESC";
+
+        Cursor cursor = db.query(TweetEntry.TABLE_NAME,
+                null, null, null,
+                null, null, orderBy);
+
+        while(cursor != null && cursor.moveToNext()) {
+            Tweet tweet = new Tweet();
+
+            tweet.setCoinName(cursor.getString(cursor.getColumnIndexOrThrow(TweetEntry.COL_COIN_NAME)));
+            tweet.setCoinSymbol(cursor.getString(cursor.getColumnIndexOrThrow(TweetEntry.COL_COIN_SYMBOL)));
+            tweet.setCoinHandle(cursor.getString(cursor.getColumnIndexOrThrow(TweetEntry.COL_COIN_HANDLE)));
+            tweet.setTweet(cursor.getString(cursor.getColumnIndexOrThrow(TweetEntry.COL_TWEET)));
+            tweet.setUrl(cursor.getString(cursor.getColumnIndexOrThrow(TweetEntry.COL_URL)));
+            tweet.setDate(cursor.getString(cursor.getColumnIndexOrThrow(TweetEntry.COL_DATE)));
+            tweet.setKeyword(cursor.getString(cursor.getColumnIndexOrThrow(TweetEntry.COL_KEYWORD)));
+
+            tweetList.add(tweet);
+        }
+
+        Log.d("db", "Read from database...");
+
+        if (cursor != null) {
+            cursor.close();
+        }
+        db.setTransactionSuccessful();
+        db.endTransaction();
+        db.close();
     }
 }
