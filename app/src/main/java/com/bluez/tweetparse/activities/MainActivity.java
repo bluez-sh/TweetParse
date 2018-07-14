@@ -8,6 +8,8 @@ import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
+import android.view.View;
+import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import com.android.volley.RequestQueue;
@@ -36,6 +38,7 @@ public class MainActivity extends AppCompatActivity {
     private List<Tweet> tweetList;
     private RecyclerView recyclerView;
     private TweetDbHelper mDbHelper;
+    private ProgressBar bar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +48,11 @@ public class MainActivity extends AppCompatActivity {
         recyclerView = findViewById(R.id.recycler_view_id);
         tweetList = new ArrayList<>();
         mDbHelper = new TweetDbHelper(this);
+
+        bar = findViewById(R.id.indeterminateBar);
+        bar.setVisibility(View.VISIBLE);
+        recyclerView.setVisibility(View.GONE);
+
         jsonRequest();
     }
 
@@ -109,6 +117,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupRecyclerView(List<Tweet> tweetList) {
+        bar.setVisibility(View.GONE);
+        recyclerView.setVisibility(View.VISIBLE);
+
         RecyclerViewAdapter adapter = new RecyclerViewAdapter(this, tweetList);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setHasFixedSize(true);
