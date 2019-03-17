@@ -3,12 +3,15 @@ package com.bluez.tweetparse.activities;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.View;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
@@ -38,8 +41,10 @@ public class MainActivity extends AppCompatActivity {
     private List<Tweet> tweetList;
     private RecyclerView recyclerView;
     private TweetDbHelper mDbHelper;
-    private ProgressBar bar;
+    //private ProgressBar bar;
 
+    WebView webView;
+    SwipeRefreshLayout swipe;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -49,14 +54,46 @@ public class MainActivity extends AppCompatActivity {
         tweetList = new ArrayList<>();
         mDbHelper = new TweetDbHelper(this);
 
-        bar = findViewById(R.id.indeterminateBar);
-        bar.setVisibility(View.VISIBLE);
+        /*bar = findViewById(R.id.indeterminateBar);
+        bar.setVisibility(View.VISIBLE);*/
         recyclerView.setVisibility(View.GONE);
+
+        swipe = findViewById(R.id.swipe);
+        swipe.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+
+                LoadWeb();
+                jsonRequest();
+            }
+        });
+
+        LoadWeb();
 
         jsonRequest();
     }
 
+    public void LoadWeb() {
+
+        webView = findViewById(R.id.webView);
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.getSettings().setAppCacheEnabled(true);
+        webView.loadUrl("https://google.com");
+        swipe.setRefreshing(true);
+        webView.setWebViewClient(new WebViewClient() {
+
+            public void onPageFinished(WebView view, String URL){
+
+                //Hide the SwipeRefreshLayout
+
+                swipe.setRefreshing(false);
+            }
+        });
+    }
+
     private void jsonRequest() {
+
+        swipe.setRefreshing(true);
 
         request = new JsonObjectRequest(URL, null, new Response.Listener<JSONObject>() {
             @Override
@@ -117,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupRecyclerView(List<Tweet> tweetList) {
-        bar.setVisibility(View.GONE);
+        //bar.setVisibility(View.GONE);
         recyclerView.setVisibility(View.VISIBLE);
 
         RecyclerViewAdapter adapter = new RecyclerViewAdapter(this, tweetList);
